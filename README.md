@@ -37,3 +37,115 @@ suelo.</p>
 <img width="387" height="75" alt="image" src="https://github.com/user-attachments/assets/8d4dae30-54bd-4af0-b6b5-49026b223f87" />
 <p>En el siguinete codigo se puede observar el cambio de color de los cubos así com tamvbien la curbatura y la animación</p>
 
+import bpy
+from math import radians, sin, cos
+from mathutils import Vector  
+def crear_material(nombre, color_rgb):
+    mat = bpy.data.materials.new(name=nombre)
+    mat.diffuse_color = (*color_rgb, 1.0)
+    return mat
+
+def generar_pasillo_curvo():
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.delete()
+
+    mat_gris = crear_material("GrisSuave", (0.5, 0.5, 0.5))
+    mat_rosa = crear_material("RosaPastel", (0.95, 0.65, 0.8))
+
+    segmentos = 20
+    distancia_por_segmento = 2.0
+    radio_curva = 12.0
+    angulo_total = radians(90)
+    angulo_por_segmento = angulo_total / (segmentos - 1)
+
+    ancho = 4.0
+    angulo_actual = 0.0
+    pos_x = 0.0
+    pos_y = 0.0
+
+    trayectoria_camara = []
+
+    for i in range(segmentos):
+
+        dir_x = cos(angulo_actual)
+        dir_y = sin(angulo_actual)
+
+        centro_x = pos_x + dir_x * (distancia_por_segmento / 2)
+        centro_y = pos_y + dir_y * (distancia_por_segmento / 2)
+
+        trayectoria_camara.append((centro_x, centro_y, 1.6))
+
+        offset_izq_x = -dir_y * (ancho / 2)
+        offset_izq_y = dir_x * (ancho / 2)
+
+        bpy.ops.mesh.primitive_cube_add(location=(
+            centro_x + offset_izq_x,
+            centro_y + offset_izq_y,
+            1.0
+        ))
+
+        pared_izq = bpy.context.active_object
+        pared_izq.rotation_euler.z = angulo_actual
+
+        if i % 2 == 0:
+            pared_izq.data.materials.append(mat_gris)
+        else:
+            pared_izq.data.materials.append(mat_rosa)
+            pared_izq.scale.z = 1.5
+
+        offset_der_x = dir_y * (ancho / 2)
+        offset_der_y = -dir_x * (ancho / 2)
+
+        bpy.ops.mesh.primitive_cube_add(location=(
+            centro_x + offset_der_x,
+            centro_y + offset_der_y,
+            1.0
+        ))
+
+        pared_der = bpy.context.active_object
+        pared_der.rotation_euler.z = angulo_actual
+        pared_der.data.materials.append(mat_gris)
+
+        pos_x += dir_x * distancia_por_segmento
+        pos_y += dir_y * distancia_por_segmento
+
+        angulo_actual += angulo_por_segmento
+
+    bpy.ops.mesh.primitive_plane_add(size=1, location=(pos_x/2, pos_y/2, 0))
+    suelo = bpy.context.active_object
+    suelo.scale.x = radio_curva * 2.5
+    suelo.scale.y = radio_curva * 2.5
+    suelo.data.materials.append(mat_gris)
+
+    bpy.ops.object.light_add(type='POINT', location=(pos_x, pos_y, 8))
+    luz = bpy.context.active_object
+    luz.data.energy = 1500
+
+    bpy.ops.object.camera_add(location=trayectoria_camara[0])
+    camara = bpy.context.active_object
+    bpy.context.scene.camera = camara
+
+    bpy.context.scene.frame_start = 1
+    bpy.context.scene.frame_end = len(trayectoria_camara) * 10
+
+    frame = 1
+
+    for i, posicion in enumerate(trayectoria_camara):
+
+        camara.location = posicion
+        camara.keyframe_insert(data_path="location", frame=frame)
+
+        if i < len(trayectoria_camara) - 1:
+
+            actual = Vector(posicion)
+            siguiente = Vector(trayectoria_camara[i + 1])
+
+            direccion = siguiente - actual
+            rotacion = direccion.to_track_quat('-Z', 'Y').to_euler()
+
+            camara.rotation_euler = rotacion
+            camara.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+        frame += 10
+
+generar_pasillo_curvo()
